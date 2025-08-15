@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+langchain
+langchain-openai
+openai
+python-dotenv
+pydantic
+langchain-openai
+websockets
+aiofiles

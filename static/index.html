@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cooking Assistant - Freezer to Table</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            animation: fadeIn 0.8s ease-out;
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        
+        .main-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            animation: slideUp 0.6s ease-out;
+            position: relative;
+            min-height: 500px;
+        }
+        
+        .upload-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #4a90e2;
+            border-radius: 15px;
+            padding: 60px;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e6f2ff 100%);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #e6f2ff 0%, #d6e9ff 100%);
+            transform: translateY(-2px);
+        }
+        
+        .upload-area.dragover {
+            background: #e8e9ff;
+            border-color: #764ba2;
+        }
+        
+        .upload-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-tips {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 10px;
+        }
+        
+        #fileInput, #additionalFileInput {
+            display: none;
+        }
+        
+        .preview-image {
+            max-width: 400px;
+            max-height: 400px;
+            margin: 20px auto;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            display: block;
+        }
+        
+        .ingredients-list {
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            min-height: 100px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            position: relative;
+        }
+        
+        .ingredient-tag {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 10px 18px;
+            border-radius: 25px;
+            margin: 6px;
+            font-size: 15px;
+            font-weight: 500;
+            animation: popIn 0.3s ease-out;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            transition: transform 0.2s ease;
+            cursor: default;
+            position: relative;
+        }
+        
+        .ingredient-tag:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+        }
+        
+        .ingredient-tag.new-ingredient {
+            background: linear-gradient(135deg, #00b894, #00cec9);
+            animation: popInSpecial 0.5s ease-out;
+        }
+        
+        .ingredient-tag .remove-btn {
+            margin-left: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        
+        .ingredient-tag .remove-btn:hover {
+            opacity: 1;
+        }
+        
+        .ingredient-count {
+            width: 100%;
+            text-align: center;
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .ingredient-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .input-field {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+            min-width: 200px;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .recipe-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .recipe-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .recipe-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+            border-color: #667eea;
+        }
+        
+        .recipe-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .recipe-time {
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .cooking-mode {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .step-container {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 40px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .step-number {
+            font-size: 1.2em;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .step-text {
+            font-size: 1.3em;
+            line-height: 1.6;
+            color: #333;
+            margin-bottom: 30px;
+            min-height: 100px;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #d0d0d0;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+        
+        .btn-outline:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #00b894, #00cec9);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 184, 148, 0.4);
+        }
+        
+        .voice-indicator {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 15px 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+        }
+        
+        .voice-dot {
+            width: 12px;
+            height: 12px;
+            background: #ff4757;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .voice-indicator.listening .voice-dot {
+            background: #00b894;
+            animation: pulse 0.8s infinite;
+        }
+        
+        .voice-indicator.processing .voice-dot {
+            background: #3498db;
+            animation: pulse 0.5s infinite;
+        }
+        
+        .voice-text {
+            font-size: 14px;
+            color: #333;
+            min-width: 200px;
+        }
+        
+        .voice-commands-hint {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        
+        .timer-display {
+            background: #333;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 2em;
+            padding: 20px 40px;
+            border-radius: 10px;
+            margin: 20px auto;
+            display: inline-block;
+            box-shadow: 0 0 15px rgba(0,255,0,0.3);
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+            text-align: center;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            min-width: 300px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .success-message {
+            background: #efe;
+            color: #3c3;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+            text-align: center;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            min-width: 300px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .status-message {
+            background: #f0f4ff;
+            color: #667eea;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+            text-align: center;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            min-width: 300px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .voice-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .voice-toggle {
+            background: #f8f9ff;
+            border-radius: 20px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            border: 2px solid #667eea;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #00b894;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -20px);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+        
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        @keyframes popInSpecial {
+            0% {
+                opacity: 0;
+                transform: scale(0.5) rotate(-10deg);
+            }
+            50% {
+                transform: scale(1.1) rotate(5deg);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 0.7;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            .recipe-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .upload-area {
+                padding: 30px;
+            }
+            
+            .step-container {
+                padding: 20px;
+            }
+            
+            .controls {
+                gap: 10px;
+            }
+            
+            .btn {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            
+            .preview-image {
+                max-width: 100%;
+            }
+            
+            .input-field {
+                min-width: 150px;
+            }
+            
+            .voice-indicator {
+                bottom: 20px;
+                right: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>❄️ AI Cooking Assistant</h1>
+            <p class="subtitle">Transform your freezer ingredients into delicious meals with AI-powered guidance</p>
+        </header>
+        
+        <div class="main-content">
+            <!-- Upload Section -->
+            <div id="uploadSection" class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">❄️</div>
+                    <h2>Upload Freezer/Fridge Photo</h2>
+                    <p>Take a clear photo of your freezer, refrigerator, or pantry contents</p>
+                    <div class="upload-tips">
+                        <strong>📸 Tips for best results:</strong><br>
+                        • Ensure good lighting - avoid shadows<br>
+                        • Include all visible food items<br>
+                        • Open containers to show contents<br>
+                        • Multiple angles welcome
+                    </div>
+                    <input type="file" id="fileInput" accept="image/*" capture="environment">
+                </div>
+                
+                <div id="previewSection" class="hidden">
+                    <img id="previewImage" class="preview-image" alt="Preview">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="uploadProgress"></div>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="identifyIngredients()">
+                            <span>🔍 Identify Food Ingredients</span>
+                            <span id="identifyLoader" class="loading hidden"></span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="resetUpload()">
+                            <span>📷 Take Another Photo</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Ingredients Display -->
+            <div id="ingredientsSection" class="hidden">
+                <h2 style="text-align: center; margin-bottom: 20px;">🥘 Identified Ingredients</h2>
+                <div id="ingredientsList" class="ingredients-list"></div>
+                
+                <div class="ingredient-controls">
+                    <button class="btn btn-success" onclick="openAddMoreImage()">
+                        <span>📷 Add More From Image</span>
+                    </button>
+                    <button class="btn btn-outline" onclick="addManualIngredient()">
+                        <span>➕ Add Manually</span>
+                    </button>
+                </div>
+                
+                <!-- Hidden file input for additional images -->
+                <input type="file" id="additionalFileInput" accept="image/*" capture="environment" onchange="handleAdditionalImage(event)">
+                
+                <div style="margin-top: 30px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+                    <input type="text" id="dietaryPrefs" placeholder="Dietary preferences (optional)" 
+                           class="input-field">
+                    <input type="text" id="cuisineType" placeholder="Cuisine type (optional)" 
+                           class="input-field">
+                    <button class="btn btn-primary" onclick="generateRecipes()">
+                        <span>🍳 Generate Recipes</span>
+                        <span id="generateLoader" class="loading hidden"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Recipes Display -->
+            <div id="recipesSection" class="hidden">
+                <h2 style="text-align: center; margin-bottom: 20px;">📋 Choose Your Recipe</h2>
+                <div id="recipeGrid" class="recipe-grid"></div>
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn btn-secondary" onclick="backToIngredients()">
+                        <span>⬅️ Back to Ingredients</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Cooking Mode -->
+            <div id="cookingMode" class="cooking-mode">
+                <button class="btn btn-secondary" onclick="backToRecipes()">← Back to Recipes</button>
+                
+                <h2 id="recipeTitle" style="text-align: center; margin: 20px 0;"></h2>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="stepProgress"></div>
+                </div>
+                
+                <div class="step-container">
+                    <div class="step-number" id="stepNumber">Step 1 of X</div>
+                    <div class="step-text" id="stepText"></div>
+                    
+                    <div class="controls">
+                        <button class="btn btn-secondary" id="prevBtn" onclick="previousStep()">
+                            <span>⬅️ Previous</span>
+                        </button>
+                        <button class="btn btn-primary" id="nextBtn" onclick="nextStep()">
+                            <span>Next ➡️</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="repeatStep()">
+                            <span>🔁 Repeat</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="setTimer()">
+                            <span>⏰ Set Timer</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="voice-controls">
+                    <div class="voice-toggle" onclick="toggleVoiceControl()">
+                        <span>Voice Control:</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="voiceToggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span id="voiceStatusText">Enabled</span>
+                    </div>
+                </div>
+                
+                <div class="voice-commands-hint">
+                    <h4>🎤 Voice Commands (Always Listening)</h4>
+                    <p style="margin-top: 10px;">Just speak naturally - the assistant is listening:</p>
+                    <ul style="list-style: none; margin: 10px 0;">
+                        <li>• Say <strong>"Next"</strong> or <strong>"Continue"</strong> to go forward</li>
+                        <li>• Say <strong>"Previous"</strong> or <strong>"Go back"</strong> to go back</li>
+                        <li>• Say <strong>"Repeat"</strong> to hear the step again</li>
+                        <li>• Say <strong>"Set timer for X minutes"</strong> to start a timer</li>
+                        <li>• Say <strong>"Enable voice"</strong> to turn on voice commands</li>
+                        <li>• Say <strong>"Disable voice"</strong> to turn off voice commands</li>
+                    </ul>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                        The assistant will automatically detect when you stop speaking.
+                    </p>
+                </div>
+                
+                <div id="timerSection" class="hidden" style="text-align: center;">
+                    <div class="timer-display" id="timerDisplay">00:00</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Voice Indicator -->
+    <div id="voiceIndicator" class="voice-indicator">
+        <div class="voice-dot"></div>
+        <div class="voice-text" id="voiceText">Voice assistant is listening</div>
+    </div>
+    
+    <script>
+        // Configuration
+        const API_URL = 'http://localhost:8000';
+        const SILENCE_THRESHOLD = 0.02; // Volume level to consider as silence
+        const SILENCE_DURATION = 3000;  // 3 seconds of silence to stop recording
+        
+        // Application State
+        const appState = {
+            ws: null,
+            currentSessionId: null,
+            currentRecipe: null,
+            currentStep: 0,
+            totalSteps: 0,
+            audioContext: null,
+            audioStream: null,
+            mediaRecorder: null,
+            audioChunks: [],
+            activeTimers: {},
+            identifiedIngredients: [],
+            audioElements: {},
+            isRecording: false,
+            lastSoundTime: 0,
+            silenceTimeout: null,
+            voiceDetectionActive: true,
+            voiceEnabled: true
+        };
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeEventListeners();
+        });
+        
+        // Initialize all event listeners
+        function initializeEventListeners() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            
+            // File upload events
+            uploadArea.addEventListener('click', () => fileInput.click());
+            uploadArea.addEventListener('dragover', handleDragOver);
+            uploadArea.addEventListener('dragleave', handleDragLeave);
+            uploadArea.addEventListener('drop', handleDrop);
+            fileInput.addEventListener('change', handleFileChange);
+        }
+        
+        // Toggle voice control
+        function toggleVoiceControl() {
+            const toggle = document.getElementById('voiceToggle');
+            const statusText = document.getElementById('voiceStatusText');
+            
+            appState.voiceEnabled = !toggle.checked;
+            toggle.checked = appState.voiceEnabled;
+            statusText.textContent = appState.voiceEnabled ? 'Enabled' : 'Disabled';
+            
+            if (appState.voiceEnabled) {
+                if (!appState.audioStream) {
+                    initializeVoiceDetection();
+                } else {
+                    startRecording();
+                }
+                showSuccess('Voice commands enabled');
+            } else {
+                stopRecording();
+                showStatus('Voice commands disabled');
+            }
+        }
+        
+        // Initialize continuous voice detection
+        async function initializeVoiceDetection() {
+            try {
+                // Request microphone permission
+                appState.audioStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                // Create audio context
+                appState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Start recording
+                startRecording();
+                
+                // Show voice status
+                document.getElementById('voiceIndicator').classList.add('listening');
+                
+            } catch (error) {
+                console.error('Error initializing voice detection:', error);
+                document.getElementById('voiceIndicator').classList.remove('listening');
+                document.getElementById('voiceText').textContent = 'Microphone access denied';
+                showError('Please allow microphone access for voice commands');
+                appState.voiceEnabled = false;
+            }
+        }
+        
+        // Start recording with silence detection
+        function startRecording() {
+            if (!appState.voiceDetectionActive || !appState.voiceEnabled || !appState.audioStream) return;
+            
+            // Create media recorder
+            appState.mediaRecorder = new MediaRecorder(appState.audioStream);
+            appState.audioChunks = [];
+            
+            // Set up media recorder events
+            appState.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    appState.audioChunks.push(event.data);
+                }
+            };
+            
+            appState.mediaRecorder.onstop = async () => {
+                if (appState.audioChunks.length === 0) return;
+                
+                // Create audio blob
+                const audioBlob = new Blob(appState.audioChunks, { type: 'audio/webm' });
+                
+                // Process the audio
+                if (audioBlob.size > 1000) { // Minimum size check
+                    await processVoiceCommand(audioBlob);
+                }
+                
+                // Reset for next recording
+                appState.audioChunks = [];
+                
+                // Restart if voice is still active
+                if (appState.voiceDetectionActive && appState.voiceEnabled) {
+                    setTimeout(startRecording, 500);
+                }
+            };
+            
+            // Start recording
+            appState.mediaRecorder.start();
+            appState.isRecording = true;
+            appState.lastSoundTime = Date.now();
+            
+            // Create analyzer for silence detection
+            const source = appState.audioContext.createMediaStreamSource(appState.audioStream);
+            const analyzer = appState.audioContext.createAnalyser();
+            analyzer.fftSize = 2048;
+            source.connect(analyzer);
+            
+            // Create buffer for audio analysis
+            const bufferLength = analyzer.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            // Function to detect silence
+            const detectSilence = () => {
+                if (!appState.isRecording) return;
+                
+                // Get current audio data
+                analyzer.getByteTimeDomainData(dataArray);
+                
+                // Calculate RMS volume
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    // Normalize to -1 to 1
+                    const sample = (dataArray[i] - 128) / 128;
+                    sum += sample * sample;
+                }
+                const rms = Math.sqrt(sum / bufferLength);
+                
+                // Check if we have sound
+                if (rms > SILENCE_THRESHOLD) {
+                    appState.lastSoundTime = Date.now();
+                    document.getElementById('voiceText').textContent = 'Listening...';
+                    document.getElementById('voiceIndicator').classList.add('processing');
+                    document.getElementById('voiceIndicator').classList.remove('listening');
+                } else {
+                    document.getElementById('voiceIndicator').classList.add('listening');
+                    document.getElementById('voiceIndicator').classList.remove('processing');
+                }
+                
+                // Check for silence duration
+                const silenceTime = Date.now() - appState.lastSoundTime;
+                if (silenceTime >= SILENCE_DURATION) {
+                    // Stop recording after 3 seconds of silence
+                    stopRecording();
+                } else {
+                    // Continue monitoring
+                    requestAnimationFrame(detectSilence);
+                }
+            };
+            
+            // Start silence detection
+            detectSilence();
+        }
+        
+        // Stop current recording
+        function stopRecording() {
+            if (!appState.isRecording) return;
+            
+            appState.isRecording = false;
+            appState.mediaRecorder.stop();
+            document.getElementById('voiceIndicator').classList.add('processing');
+            document.getElementById('voiceText').textContent = 'Processing your command...';
+        }
+        
+        // Process voice command
+        async function processVoiceCommand(audioBlob) {
+            if (!appState.ws || appState.ws.readyState !== WebSocket.OPEN) {
+                console.log('WebSocket not connected');
+                return;
+            }
+            
+            // Convert blob to base64
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                try {
+                    const base64Audio = reader.result.split(',')[1];
+                    
+                    // Send to WebSocket for processing
+                    appState.ws.send(JSON.stringify({
+                        type: 'voice_data',
+                        audio_base64: base64Audio
+                    }));
+                    
+                    console.log('Sent audio to server for processing');
+                } catch (error) {
+                    console.error('Error sending audio:', error);
+                    document.getElementById('voiceText').textContent = 'Error processing voice';
+                    setTimeout(() => {
+                        document.getElementById('voiceText').textContent = 'Voice assistant is listening';
+                        document.getElementById('voiceIndicator').classList.remove('processing');
+                        document.getElementById('voiceIndicator').classList.add('listening');
+                    }, 2000);
+                }
+            };
+            
+            reader.readAsDataURL(audioBlob);
+        }
+        
+        // Stop voice detection
+        function stopVoiceDetection() {
+            appState.voiceDetectionActive = false;
+            
+            if (appState.mediaRecorder && appState.mediaRecorder.state === 'recording') {
+                try {
+                    appState.mediaRecorder.stop();
+                } catch (e) {
+                    console.error('Error stopping recorder:', e);
+                }
+            }
+            
+            // Stop the audio stream
+            if (appState.audioStream) {
+                appState.audioStream.getTracks().forEach(track => track.stop());
+                appState.audioStream = null;
+            }
+            
+            document.getElementById('voiceIndicator').classList.remove('listening', 'processing');
+            console.log('Voice detection stopped');
+        }
+        
+        // File handling functions (remain unchanged from your original implementation)
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+        
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('dragover');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        }
+        
+        function handleFileChange(e) {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        }
+        
+        function handleFileSelect(file) {
+            // Check file size (limit to 10MB)
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                showError('Image too large. Please use an image under 10MB.');
+                return;
+            }
+            
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Check image dimensions for quality
+                        if (this.width < 300 || this.height < 300) {
+                            showError('Image resolution too low. Please use a clearer photo.');
+                            return;
+                        }
+                        document.getElementById('previewImage').src = e.target.result;
+                        document.getElementById('previewSection').classList.remove('hidden');
+                        document.getElementById('uploadArea').style.display = 'none';
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                showError('Please select an image file (JPG, PNG, etc.)');
+            }
+        }
+        
+        // Open file dialog for additional images
+        function openAddMoreImage() {
+            document.getElementById('additionalFileInput').click();
+        }
+        
+        // Handle additional image upload
+        async function handleAdditionalImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Check file size
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                showError('Image too large. Please use an image under 10MB.');
+                return;
+            }
+            
+            if (!file.type.startsWith('image/')) {
+                showError('Please select an image file');
+                return;
+            }
+            
+            showStatus('🔍 Analyzing additional items...');
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch(`${API_URL}/api/identify-ingredients`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.ingredients && data.ingredients.length > 0) {
+                    // Add new ingredients to existing list
+                    const newIngredients = data.ingredients.filter(newIng => 
+                        !appState.identifiedIngredients.some(existing => 
+                            existing.name.toLowerCase() === newIng.name.toLowerCase()
+                        )
+                    );
+                    
+                    if (newIngredients.length > 0) {
+                        // Mark new ingredients for special animation
+                        newIngredients.forEach(ing => {
+                            ing.isNew = true;
+                        });
+                        
+                        appState.identifiedIngredients = [...appState.identifiedIngredients, ...newIngredients];
+                        displayIngredients(appState.identifiedIngredients);
+                        showSuccess(`Added ${newIngredients.length} new ingredients!`);
+                    } else {
+                        showStatus('No new ingredients found (duplicates removed)');
+                    }
+                } else {
+                    showError('No ingredients found in this image');
+                }
+                
+                // Reset the file input
+                event.target.value = '';
+                
+            } catch (error) {
+                showError('Error identifying ingredients: ' + error.message);
+            }
+        }
+        
+        // Reset upload function
+        function resetUpload() {
+            document.getElementById('fileInput').value = '';
+            document.getElementById('previewSection').classList.add('hidden');
+            document.getElementById('uploadArea').style.display = 'block';
+            document.getElementById('uploadProgress').style.width = '0%';
+        }
+        
+        // API Functions
+        async function identifyIngredients() {
+            const loader = document.getElementById('identifyLoader');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (!fileInput.files[0]) {
+                showError('Please select an image first');
+                return;
+            }
+            
+            // Show loading state
+            loader.classList.remove('hidden');
+            document.getElementById('uploadProgress').style.width = '30%';
+            
+            // Show status message
+            showStatus('🔍 Analyzing freezer contents...');
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch(`${API_URL}/api/identify-ingredients`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                document.getElementById('uploadProgress').style.width = '70%';
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Validate we have ingredients
+                if (!data.ingredients || data.ingredients.length === 0) {
+                    showError('No food ingredients detected. Please try another image with clearer view of food items.');
+                    return;
+                }
+                
+                displayIngredients(data.ingredients);
+                
+                document.getElementById('uploadSection').classList.add('hidden');
+                document.getElementById('ingredientsSection').classList.remove('hidden');
+                
+                // Show success message with count
+                showSuccess(`Successfully identified ${data.ingredients.length} food ingredients!`);
+                
+            } catch (error) {
+                showError('Error identifying ingredients: ' + error.message);
+            } finally {
+                loader.classList.add('hidden');
+                document.getElementById('uploadProgress').style.width = '100%';
+                setTimeout(() => {
+                    document.getElementById('uploadProgress').style.width = '0%';
+                }, 500);
+            }
+        }
+        
+        function displayIngredients(ingredients) {
+            const container = document.getElementById('ingredientsList');
+            
+            // Filter out any invalid entries
+            const validIngredients = ingredients.filter(ing => 
+                ing.name && 
+                ing.name.trim() !== '' && 
+                !ing.name.toLowerCase().includes('unable to identify')
+            );
+            
+            // Clear container
+            container.innerHTML = '';
+            
+            // Display ingredients
+            validIngredients.forEach((ing, index) => {
+                const tag = document.createElement('span');
+                tag.className = ing.isNew ? 'ingredient-tag new-ingredient' : 'ingredient-tag';
+                tag.style.animationDelay = `${index * 0.05}s`;
+                tag.innerHTML = `
+                    ${ing.name}
+                    <span class="remove-btn" onclick="removeIngredient(${index})" title="Remove ingredient">×</span>
+                `;
+                container.appendChild(tag);
+            });
+            
+            // Add ingredient count display
+            const countDiv = document.createElement('div');
+            countDiv.className = 'ingredient-count';
+            countDiv.innerHTML = `<strong>${validIngredients.length}</strong> ingredients total`;
+            container.appendChild(countDiv);
+            
+            // Store only the valid ingredients
+            appState.identifiedIngredients = validIngredients;
+        }
+        
+        // Add manual ingredient
+        function addManualIngredient() {
+            const ingredient = prompt('Enter ingredient name:');
+            if (ingredient && ingredient.trim()) {
+                // Check for duplicates
+                if (!appState.identifiedIngredients.some(ing => 
+                    ing.name.toLowerCase() === ingredient.trim().toLowerCase()
+                )) {
+                    appState.identifiedIngredients.push({ 
+                        name: ingredient.trim(),
+                        isNew: true 
+                    });
+                    displayIngredients(appState.identifiedIngredients);
+                    showSuccess(`Added: ${ingredient}`);
+                } else {
+                    showStatus('Ingredient already exists');
+                }
+            }
+        }
+        
+        // Remove ingredient
+        function removeIngredient(index) {
+            const removed = appState.identifiedIngredients[index].name;
+            appState.identifiedIngredients.splice(index, 1);
+            displayIngredients(appState.identifiedIngredients);
+            showStatus(`Removed: ${removed}`);
+        }
+        
+        // Back to ingredients
+        function backToIngredients() {
+            document.getElementById('recipesSection').classList.add('hidden');
+            document.getElementById('ingredientsSection').classList.remove('hidden');
+        }
+        
+        async function generateRecipes() {
+            const loader = document.getElementById('generateLoader');
+            loader.classList.remove('hidden');
+            
+            // Extract just the names from ingredients
+            const ingredientNames = appState.identifiedIngredients.map(i => 
+                typeof i === 'string' ? i : i.name
+            );
+            
+            if (ingredientNames.length === 0) {
+                showError('No ingredients available. Please identify ingredients first.');
+                loader.classList.add('hidden');
+                return;
+            }
+            
+            const requestBody = {
+                ingredients: ingredientNames,
+                dietary_preferences: document.getElementById('dietaryPrefs').value || null,
+                cuisine_type: document.getElementById('cuisineType').value || null
+            };
+            
+            showStatus('🍳 Creating personalized recipes...');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/generate-recipes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.recipes || data.recipes.length === 0) {
+                    showError('Could not generate recipes. Please try with different ingredients.');
+                    return;
+                }
+                
+                displayRecipes(data.recipes);
+                
+                document.getElementById('ingredientsSection').classList.add('hidden');
+                document.getElementById('recipesSection').classList.remove('hidden');
+                
+                showSuccess('3 delicious recipes generated!');
+                
+            } catch (error) {
+                showError('Error generating recipes: ' + error.message);
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+        
+        function displayRecipes(recipes) {
+            const grid = document.getElementById('recipeGrid');
+            grid.innerHTML = recipes.map(recipe => `
+                <div class="recipe-card" onclick="startCooking('${recipe.id}')">
+                    <h3 class="recipe-title">${recipe.title}</h3>
+                    <div class="recipe-time">
+                        <span>⏱️</span>
+                        <span>${recipe.cooking_time}</span>
+                    </div>
+                    <p><strong>Servings:</strong> ${recipe.servings}</p>
+                    <p style="margin-top: 10px; margin-bottom: 10px;"><strong>Ingredients:</strong> ${recipe.ingredients.length}</p>
+                    <p><strong>Steps:</strong> ${recipe.steps.length}</p>
+                    <div style="margin-top: auto; padding-top: 15px;">
+                        <button class="btn btn-primary" style="width: 100%;">
+                            <span>👨‍🍳 Start Cooking</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        async function startCooking(recipeId) {
+            try {
+                showStatus('Starting cooking session...');
+                
+                const response = await fetch(`${API_URL}/api/start-cooking/${recipeId}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                appState.currentSessionId = data.session_id;
+                appState.currentRecipe = data.recipe;
+                appState.currentStep = 0;
+                appState.totalSteps = data.recipe.steps.length;
+                
+                // Initialize WebSocket connection
+                initWebSocket();
+                
+                // Initialize voice detection
+                await initializeVoiceDetection();
+                
+                // Show cooking mode
+                document.getElementById('recipesSection').classList.add('hidden');
+                document.getElementById('cookingMode').style.display = 'block';
+                
+                // Display recipe title and first step
+                document.getElementById('recipeTitle').textContent = appState.currentRecipe.title;
+                updateStep(0);
+                
+                showSuccess('Let\'s start cooking! Voice commands are active.');
+                
+                // Preload TTS for first step
+                preloadTTS(0);
+            } catch (error) {
+                showError('Error starting cooking session: ' + error.message);
+            }
+        }
+        
+        // WebSocket Functions
+        function initWebSocket() {
+            const wsUrl = `ws://localhost:8000/ws/${appState.currentSessionId}`;
+            appState.ws = new WebSocket(wsUrl);
+            
+            appState.ws.onopen = () => {
+                console.log('WebSocket connected');
+            };
+            
+            appState.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            appState.ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                showError('Connection error. Please refresh the page.');
+            };
+            
+            appState.ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                stopVoiceDetection();
+            };
+        }
+        
+        function handleWebSocketMessage(data) {
+            console.log('WebSocket message received:', data.action);
+            
+            switch (data.action) {
+                case 'voice_recognized':
+                    console.log('Voice command recognized:', data.transcription);
+                    document.getElementById('voiceText').textContent = `Command: "${data.command}"`;
+                    showStatus(`Voice command: ${data.command}`);
+                    
+                    // Handle special commands
+                    if (data.command.toLowerCase().includes('enable voice')) {
+                        appState.voiceEnabled = true;
+                        document.getElementById('voiceToggle').checked = true;
+                        document.getElementById('voiceStatusText').textContent = 'Enabled';
+                        showSuccess('Voice commands enabled');
+                    } 
+                    else if (data.command.toLowerCase().includes('disable voice')) {
+                        appState.voiceEnabled = false;
+                        document.getElementById('voiceToggle').checked = false;
+                        document.getElementById('voiceStatusText').textContent = 'Disabled';
+                        showStatus('Voice commands disabled');
+                    }
+                    
+                    setTimeout(() => {
+                        document.getElementById('voiceText').textContent = 'Voice assistant is listening';
+                        document.getElementById('voiceIndicator').classList.remove('processing');
+                        document.getElementById('voiceIndicator').classList.add('listening');
+                    }, 2000);
+                    break;
+                    
+                case 'voice_not_recognized':
+                    console.log('Voice not recognized:', data.transcription);
+                    document.getElementById('voiceText').textContent = 'No command detected';
+                    setTimeout(() => {
+                        document.getElementById('voiceText').textContent = 'Voice assistant is listening';
+                        document.getElementById('voiceIndicator').classList.remove('processing');
+                        document.getElementById('voiceIndicator').classList.add('listening');
+                    }, 2000);
+                    break;
+                    
+                case 'voice_error':
+                    console.error('Voice error:', data.error);
+                    document.getElementById('voiceText').textContent = 'Voice error';
+                    setTimeout(() => {
+                        document.getElementById('voiceText').textContent = 'Voice assistant is listening';
+                        document.getElementById('voiceIndicator').classList.remove('processing');
+                        document.getElementById('voiceIndicator').classList.add('listening');
+                    }, 2000);
+                    break;
+                    
+                case 'step_updated':
+                    appState.currentStep = data.current_step;
+                    updateStep(data.current_step);
+                    if (data.is_last_step) {
+                        document.getElementById('nextBtn').innerHTML = '<span>Finish 🎉</span>';
+                    }
+                    break;
+                    
+                case 'step_repeated':
+                    playTTSForStep(appState.currentStep);
+                    showStatus('Repeating current step');
+                    break;
+                    
+                case 'timer_started':
+                    startTimerDisplay(data.timer_id, data.duration);
+                    showSuccess('Timer started!');
+                    break;
+                    
+                case 'timer_completed':
+                    showSuccess('⏰ Timer completed!');
+                    playTimerSound();
+                    document.getElementById('timerSection').classList.add('hidden');
+                    break;
+                    
+                case 'recipe_completed':
+                    showSuccess(data.message);
+                    stopVoiceDetection();
+                    setTimeout(() => backToRecipes(), 3000);
+                    break;
+                    
+                case 'error':
+                    showError(data.error);
+                    break;
+            }
+        }
+        
+        function updateStep(stepIndex) {
+            appState.currentStep = stepIndex;
+            document.getElementById('stepNumber').textContent = 
+                `Step ${stepIndex + 1} of ${appState.totalSteps}`;
+            document.getElementById('stepText').textContent = 
+                appState.currentRecipe.steps[stepIndex];
+            
+            // Update progress bar
+            const progress = ((stepIndex + 1) / appState.totalSteps) * 100;
+            document.getElementById('stepProgress').style.width = `${progress}%`;
+            
+            // Update button states
+            document.getElementById('prevBtn').disabled = stepIndex === 0;
+            
+            // Reset next button text if not on last step
+            if (stepIndex < appState.totalSteps - 1) {
+                document.getElementById('nextBtn').innerHTML = '<span>Next ➡️</span>';
+            }
+            
+            // Play TTS for this step
+            playTTSForStep(stepIndex);
+            
+            // Preload next step audio
+            if (stepIndex < appState.totalSteps - 1) {
+                preloadTTS(stepIndex + 1);
+            }
+        }
+        
+        // TTS Functions
+        function preloadTTS(stepIndex) {
+            const stepText = appState.currentRecipe.steps[stepIndex];
+            const cacheKey = `tts_${stepText.substring(0, 50)}`;
+            
+            if (!appState.audioElements[cacheKey]) {
+                // Generate TTS in background
+                fetch(`${API_URL}/api/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: stepText })
+                }).catch(e => console.log('Preload TTS failed:', e));
+            }
+        }
+        
+        async function playTTSForStep(stepIndex) {
+            const stepText = appState.currentRecipe.steps[stepIndex];
+            const cacheKey = `tts_${stepText.substring(0, 50)}`;
+            
+            // Create audio element if it doesn't exist
+            if (!appState.audioElements[cacheKey]) {
+                showStatus('Preparing audio...');
+                
+                try {
+                    // Generate TTS
+                    const response = await fetch(`${API_URL}/api/tts`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: stepText })
+                    });
+                    
+                    const audioBlob = await response.blob();
+                    appState.audioElements[cacheKey] = new Audio(URL.createObjectURL(audioBlob));
+                } catch (error) {
+                    console.error('Error loading TTS:', error);
+                    return;
+                }
+            }
+            
+            const audio = appState.audioElements[cacheKey];
+            
+            // Stop any currently playing audio
+            Object.values(appState.audioElements).forEach(a => {
+                if (a !== audio && !a.paused) {
+                    a.pause();
+                    a.currentTime = 0;
+                }
+            });
+            
+            // Play the audio
+            audio.play().catch(e => console.log('Audio playback failed:', e));
+        }
+        
+        // Control Functions
+        function nextStep() {
+            sendCommand('next');
+        }
+        
+        function previousStep() {
+            sendCommand('previous');
+        }
+        
+        function repeatStep() {
+            sendCommand('repeat');
+        }
+        
+        function setTimer() {
+            const minutes = prompt('Enter timer duration in minutes:');
+            if (minutes && !isNaN(minutes) && minutes > 0) {
+                sendCommand(`timer ${minutes} minutes`);
+            }
+        }
+        
+        function sendCommand(command) {
+            if (appState.ws && appState.ws.readyState === WebSocket.OPEN) {
+                appState.ws.send(JSON.stringify({ command }));
+            } else {
+                showError('Connection lost. Please refresh the page.');
+            }
+        }
+        
+        // Timer Functions
+        function startTimerDisplay(timerId, duration) {
+            document.getElementById('timerSection').classList.remove('hidden');
+            let remaining = duration;
+            
+            // Update display immediately
+            const minutes = Math.floor(remaining / 60);
+            const seconds = remaining % 60;
+            document.getElementById('timerDisplay').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            appState.activeTimers[timerId] = setInterval(() => {
+                remaining--;
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                document.getElementById('timerDisplay').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (remaining <= 0) {
+                    clearInterval(appState.activeTimers[timerId]);
+                    delete appState.activeTimers[timerId];
+                }
+            }, 1000);
+        }
+        
+        function playTimerSound() {
+            // Create a simple beep sound
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            gainNode.gain.value = 0.3;
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+        
+        // Navigation Functions
+        function backToRecipes() {
+            // Stop voice detection
+            stopVoiceDetection();
+            
+            // Clean up
+            if (appState.ws) {
+                appState.ws.close();
+            }
+            
+            // Clear timers
+            Object.keys(appState.activeTimers).forEach(timerId => {
+                clearInterval(appState.activeTimers[timerId]);
+            });
+            appState.activeTimers = {};
+            
+            // Reset UI
+            document.getElementById('cookingMode').style.display = 'none';
+            document.getElementById('recipesSection').classList.remove('hidden');
+            document.getElementById('timerSection').classList.add('hidden');
+        }
+        
+        // Utility Functions
+        function showError(message) {
+            removeAllMessages();
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = '❌ ' + message;
+            document.body.appendChild(errorDiv);
+            
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            removeAllMessages();
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = '✅ ' + message;
+            document.body.appendChild(successDiv);
+            
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+        
+        function showStatus(message) {
+            removeAllMessages();
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'status-message';
+            statusDiv.textContent = message;
+            document.body.appendChild(statusDiv);
+            
+            setTimeout(() => {
+                statusDiv.remove();
+            }, 2000);
+        }
+        
+        function removeAllMessages() {
+            // Remove any existing messages before showing new one
+            const messages = document.querySelectorAll('.error-message, .success-message, .status-message');
+            messages.forEach(msg => msg.remove());
+        }
+    </script>
+</body>
+</html>
