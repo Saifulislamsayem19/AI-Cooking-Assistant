@@ -18,7 +18,7 @@ import io
 import openai
 from openai import AsyncOpenAI
 
-# Updated LangChain imports - using modern LCEL syntax
+# Updated LangChain imports
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 
@@ -43,7 +43,7 @@ app.add_middleware(
 # Initialize LangChain with OpenAI
 llm = ChatOpenAI(
     temperature=0.7,
-    model="gpt-4o-mini",  # Updated model name
+    model="gpt-4o-mini",
     openai_api_key=openai_api_key
 )
 
@@ -134,7 +134,7 @@ async def identify_ingredients(file: UploadFile = File(...)):
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:image/jpeg;base64,{base64_image}",
-                            "detail": "high"  # Use high detail for better accuracy
+                            "detail": "high"  
                         }
                     }
                 ]
@@ -143,10 +143,10 @@ async def identify_ingredients(file: UploadFile = File(...)):
         
         # Use vision model with higher accuracy settings
         vision_llm_accurate = ChatOpenAI(
-            temperature=0.1,  # Lower temperature for more consistent results
-            model="gpt-4o",  # Using latest vision model
+            temperature=0.1, 
+            model="gpt-4o",  
             openai_api_key=openai_api_key,
-            max_tokens=1000  # Allow more tokens for comprehensive lists
+            max_tokens=1000  
         )
         
         # Get response from vision model
@@ -170,7 +170,7 @@ async def identify_ingredients(file: UploadFile = File(...)):
                 if isinstance(ingredient, str) and ingredient.strip():
                     # Remove any quotes or special characters
                     clean_name = ingredient.strip().strip('"\'')
-                    if clean_name and len(clean_name) > 1:  # Filter out single characters
+                    if clean_name and len(clean_name) > 1:  
                         cleaned_ingredients.append(clean_name)
             
             # Remove duplicates while preserving order
@@ -219,7 +219,7 @@ async def generate_recipes(request: RecipeRequest):
         Make sure the recipes are diverse and creative. Ensure the JSON is properly formatted.
         """)
         
-        # Use modern LCEL syntax instead of deprecated LLMChain
+        # Create the chain with the prompt and LLM
         chain = prompt | llm
         
         response = await chain.ainvoke({
@@ -230,7 +230,6 @@ async def generate_recipes(request: RecipeRequest):
         
         # Parse response
         try:
-            # The response content is in response.content, not response['text']
             content = response.content.strip()
             
             # Try to extract JSON object
@@ -274,7 +273,7 @@ async def start_cooking(recipe_id: str):
     
     return {
         "session_id": session_id,
-        "recipe": recipe.model_dump(),  # Updated from .dict() to .model_dump()
+        "recipe": recipe.model_dump(),  
         "current_step": 0,
         "total_steps": len(recipe.steps)
     }
@@ -403,7 +402,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             })
                             # Process the command
                             data = {"command": command}
-                            # Continue to command processing below
                         else:
                             await websocket.send_json({
                                 "action": "voice_not_recognized",
@@ -419,7 +417,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         })
                         continue
             
-            # Process commands (from voice or direct)
+            # Process commands
             command = data.get("command", "").lower()
             
             # Validate command sequence
@@ -563,7 +561,7 @@ async def get_recipe(recipe_id: str):
     
     return active_recipes[recipe_id].model_dump()  
 
-# Serve static files - MUST BE AT THE END
+# Serve static files
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":
