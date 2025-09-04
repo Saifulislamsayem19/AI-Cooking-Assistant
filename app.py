@@ -1,10 +1,10 @@
-from fastapi import FastAPI, UploadFile, File, Request, HTTPException, WebSocket
+from fastapi import FastAPI, UploadFile, File, Request, HTTPException, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import base64
 import os
 import json
@@ -13,6 +13,7 @@ from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
 import io
+import requests
 
 # Import OpenAI client
 import openai
@@ -25,9 +26,13 @@ from langchain.prompts import ChatPromptTemplate
 # Load environment variables
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
+spoonacular_api_key = os.getenv("SPOONACULAR_API_KEY")
 
 if not openai_api_key:
     raise ValueError("OPENAI_API_KEY not found in environment variables")
+
+if not spoonacular_api_key:
+    raise ValueError("SPOONACULAR_API_KEY not found in environment variables")
 
 app = FastAPI()
 
@@ -43,7 +48,7 @@ app.add_middleware(
 # Initialize LangChain with OpenAI
 llm = ChatOpenAI(
     temperature=0.7,
-    model="gpt-4o-mini",
+    model="gpt-3.5-turbo-16k",
     openai_api_key=openai_api_key
 )
 
@@ -59,21 +64,26 @@ vision_llm_accurate = ChatOpenAI(
 tts_client = AsyncOpenAI(api_key=openai_api_key)
 
 # Pydantic models
-class IngredientList(BaseModel):
-    ingredients: List[Dict[str, str]]
+class Ingredient(BaseModel):
+    name: str
+    icon: str
 
 class Recipe(BaseModel):
     id: str
     title: str
-    ingredients: List[str]
-    steps: List[str]
+    image_url: str
     cooking_time: str
+    num_steps: int
+    calories: str
+    ingredients: List[Ingredient]
+    instructions: List[str]
     servings: int
 
 class RecipeRequest(BaseModel):
     ingredients: List[str]
     dietary_preferences: Optional[str] = None
     cuisine_type: Optional[str] = None
+    max_ready_time: Optional[int] = None
 
 class VoiceCommand(BaseModel):
     audio_base64: str
@@ -83,18 +93,72 @@ class TTSRequest(BaseModel):
     voice: Optional[str] = "alloy"  # alloy, echo, fable, onyx, nova, shimmer
     speed: Optional[float] = 1.0
 
-# Store active recipes and cooking sessions
-active_recipes: Dict[str, Recipe] = {}
-cooking_sessions: Dict[str, dict] = {}
+# Store active recipes and cooking sessions per user
+active_recipes: Dict[str, Dict[str, Recipe]] = {}  # user_id -> recipe_id -> Recipe
+cooking_sessions: Dict[str, Dict[str, dict]] = {}   # user_id -> session_id -> session
 
-# WebSocket connections for real-time updates
-websocket_connections: Dict[str, WebSocket] = {}
+# WebSocket connections for real-time updates per user
+websocket_connections: Dict[str, Dict[str, WebSocket]] = {}  # user_id -> session_id -> WebSocket
 
 # TTS audio cache
 tts_cache: Dict[str, bytes] = {}
 
+async def generate_ingredient_icons(ingredient_names: Union[List[str], str]) -> List[Ingredient]:
+    """Generate emoji icons for one or more ingredients"""
+    # Convert single ingredient to list if needed
+    if isinstance(ingredient_names, str):
+        ingredient_names = [ingredient_names]
+    
+    try:
+        icons = {}
+        
+        # Create emoji generation prompt for each ingredient
+        for ingredient_name in ingredient_names:
+            prompt = ChatPromptTemplate.from_template("""
+            You are an AI culinary assistant. For the following food ingredient, return only a single emoji that best represents it.
+            Ingredient: {ingredient}
+            Return the response as a single emoji.
+            """)
+
+            # Create the chain with the prompt and LLM
+            chain = prompt | llm
+
+            # Generate the emoji for the given ingredient
+            response = await chain.ainvoke({
+                "ingredient": ingredient_name
+            })
+
+            # Parse response to extract emoji
+            try:
+                content = response.content.strip()
+                
+                # Validate if we received a valid emoji
+                if len(content) > 3:  # emojis are typically 1-2 characters
+                    raise ValueError("Received content is not a valid emoji.")
+                icon = content 
+                
+            except ValueError as ve:
+                print(f"Validation error: {ve}")
+                icon = "🍽️" 
+
+            # Store the icon for the ingredient
+            icons[ingredient_name] = icon
+        
+        # Convert to list of Ingredient objects
+        return [Ingredient(name=name, icon=icon) for name, icon in icons.items()]
+        
+    except Exception as e:
+        print(f"Error generating ingredient icons: {e}")
+        # Fallback: return ingredients with default icon
+        if isinstance(ingredient_names, str):
+            return [Ingredient(name=ingredient_names, icon="🍽️")]
+        return [Ingredient(name=name, icon="🍽️") for name in ingredient_names]
+
 @app.post("/api/identify-ingredients")
-async def identify_ingredients(file: UploadFile = File(...)):
+async def identify_ingredients(
+    file: UploadFile = File(...), 
+    user_id: str = Query(..., description="User ID")
+):
     """Identify food ingredients from uploaded image using GPT-4 Vision with high accuracy"""
     try:
         # Read and encode image
@@ -192,142 +256,318 @@ async def identify_ingredients(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/generate-ingredient-icon")
-async def generate_ingredient_icon(request: Request):
-    """Generate an appropriate emoji icon for one or more ingredients using AI with LangChain LCEL syntax"""
+async def generate_ingredient_icon(
+    request: Request, 
+    user_id: str = Query(..., description="User ID")
+):
+    """Generate an appropriate emoji icon for one or more ingredients using AI"""
     try:
-        # Extract ingredients from the request body (can be one or multiple)
+        # Extract ingredients from the request body
         data = await request.json()
-        ingredients = data.get("ingredient", [])
+        ingredients = data.get("ingredients", [])
+        
+        # Handle both single ingredient and list of ingredients
+        if isinstance(ingredients, str):
+            ingredients = [ingredients]
 
         if not ingredients:
             raise HTTPException(status_code=400, detail="At least one ingredient is required.")
         
-        if isinstance(ingredients, str):  # Single ingredient case
-            ingredients = [ingredients]
-        
-        icons = {}
-        
-        # Create emoji generation prompt for each ingredient
-        for ingredient in ingredients:
-            # Create emoji generation prompt for each ingredient
-            prompt = ChatPromptTemplate.from_template("""
-            You are an AI culinary assistant. For the following food ingredient, return only a single emoji that best represents it.
-            Ingredient: {ingredient}
-            Return the response as a single emoji.
-            """)
-
-            # Create the chain with the prompt and LLM (you need to define llm, LangChain, etc.)
-            chain = prompt | llm
-
-            # Generate the emoji for the given ingredient
-            response = await chain.ainvoke({
-                "ingredient": ingredient
-            })
-
-            # Parse response to extract emoji
-            try:
-                content = response.content.strip()
-                
-                # Validate if we received a valid emoji
-                if len(content) > 3:  # emojis are typically 1-2 characters
-                    raise ValueError("Received content is not a valid emoji.")
-                icon = content 
-                
-            except ValueError as ve:
-                print(f"Validation error: {ve}")
-                icon = "🍽️" 
-
-            # Store the icon for the ingredient
-            icons[ingredient] = icon
+        # Generate icons using the improved function
+        ingredients_with_icons = await generate_ingredient_icons(ingredients)
         
         # Return the icons for each ingredient
-        return JSONResponse(content={"icons": icons})
+        return JSONResponse(content={"ingredients": [ingredient.model_dump() for ingredient in ingredients_with_icons]})
 
     except Exception as e:
         print(f"Error generating ingredient icons: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating ingredient icons: {str(e)}")
 
-@app.post("/api/generate-recipes")
-async def generate_recipes(request: RecipeRequest):
-    """Generate 3 recipe suggestions based on ingredients using modern LangChain LCEL syntax"""
-    try:
-        # Create recipe generation prompt
-        prompt = ChatPromptTemplate.from_template("""
-        You are a professional chef. Based on the following ingredients, generate exactly 3 different recipe suggestions.
+
+# @app.post("/api/generate-recipes")
+# async def generate_recipes(
+#     request: RecipeRequest, 
+#     user_id: str = Query(..., description="User ID")
+# ):
+#     """Generate recipe suggestions based on ingredients using Spoonacular API"""
+#     try:
+#         # Initialize user's recipe storage if needed
+#         if user_id not in active_recipes:
+#             active_recipes[user_id] = {}
+
+#         # Define the base URL for Spoonacular API
+#         base_url = "https://api.spoonacular.com/recipes/complexSearch"
         
-        Ingredients: {ingredients}
-        Dietary Preferences: {dietary_preferences}
-        Cuisine Type: {cuisine_type}
+#         # Prepare parameters for the API call
+#         params = {
+#             "apiKey": spoonacular_api_key,
+#             "includeIngredients": ",".join(request.ingredients),
+#             "number": 3,
+#             "addRecipeInformation": True,
+#             "addRecipeInstructions": True,
+#             "fillIngredients": True,
+#             "addRecipeNutrition": True
+#         }
+
+#         # Dietary preference mapping
+#         diet_mapping = {
+#             "vegetarian": "vegetarian",
+#             "vegan": "vegan",
+#             "low carb": "ketogenic",  
+#             "high protein": "high-protein",  
+#             "no preference": None  
+#         }
+
+#         # Add optional parameters if provided
+#         if request.cuisine_type:
+#             params["cuisine"] = request.cuisine_type
+#         if request.dietary_preferences:
+#             diet_key = request.dietary_preferences.lower()
+#             if diet_key in diet_mapping and diet_mapping[diet_key]:
+#                 params["diet"] = diet_mapping[diet_key]
+#         if request.max_ready_time:
+#             params["maxReadyTime"] = request.max_ready_time
         
-        Return the response as a JSON object with a 'recipes' array containing 3 recipes.
-        Each recipe should have:
-        - id: unique identifier (use recipe1, recipe2, recipe3)
-        - title: recipe name
-        - ingredients: list of ingredients with quantities
-        - steps: detailed step-by-step cooking instructions
-        - cooking_time: total time needed
-        - servings: number of servings
+#         # Function to make the API request and handle missing ingredients
+#         def fetch_recipes(params):
+#             response = requests.get(base_url, params=params)
+#             if response.status_code != 200:
+#                 raise HTTPException(status_code=response.status_code, detail="Failed to fetch recipes from Spoonacular")
+#             return response.json()
+
+#         # Attempt to fetch recipes with all ingredients
+#         data = fetch_recipes(params)
         
-        Make sure the recipes are diverse and creative. Ensure the JSON is properly formatted.
-        """)
+#         # If no recipes found, try removing one ingredient at a time
+#         if not data.get('results'):
+#             for i in range(len(request.ingredients)):
+#                 params["includeIngredients"] = ",".join(request.ingredients[:i] + request.ingredients[i+1:])
+#                 data = fetch_recipes(params)
+#                 if data.get('results'):
+#                     break
         
-        # Create the chain with the prompt and LLM
-        chain = prompt | llm
+#         # If still no recipes found, raise an exception
+#         if not data.get('results'):
+#             raise HTTPException(status_code=404, detail="No recipes found with the given ingredients")
         
-        response = await chain.ainvoke({
-            "ingredients": ", ".join(request.ingredients),
-            "dietary_preferences": request.dietary_preferences or "None",
-            "cuisine_type": request.cuisine_type or "Any"
-        })
-        
-        # Parse response
-        try:
-            content = response.content.strip()
+#         # Format the response to match the expected structure
+#         recipes = []
+#         for i, recipe_data in enumerate(data.get('results', [])):
+#             # Extract calories from nutrition data
+#             calories = "N/A"
+#             if 'nutrition' in recipe_data:
+#                 for nutrient in recipe_data['nutrition']['nutrients']:
+#                     if nutrient['name'] == 'Calories':
+#                         calories = f"{nutrient['amount']} {nutrient['unit']}"
+#                         break
             
-            # Try to extract JSON object
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                recipes_data = json.loads(json_match.group())
-            else:
-                # If no JSON found, try parsing the entire content
-                recipes_data = json.loads(content)
-        except json.JSONDecodeError as e:
-            print(f"JSON parsing error: {e}")
-            print(f"Response content: {response.content}")
+#             # Extract ingredients
+#             ingredient_names = []
+#             for ing in recipe_data.get('extendedIngredients', []):
+#                 ingredient_names.append(f"{ing.get('name', '')}")
+            
+#             # Generate icons for ingredients
+#             ingredients_with_icons = await generate_ingredient_icons(ingredient_names)
+            
+#             # Extract instructions
+#             instructions = []
+#             if recipe_data.get('analyzedInstructions') and len(recipe_data['analyzedInstructions']) > 0:
+#                 for step in recipe_data['analyzedInstructions'][0].get('steps', []):
+#                     instructions.append(f"Step {step.get('number', '')}: {step.get('step', '')}")
+            
+#             # Create recipe object
+#             recipe_id = f"recipe_{user_id}_{i+1}"
+#             recipe = Recipe(
+#                 id=recipe_id,
+#                 title=recipe_data.get('title', 'Unknown Recipe'),
+#                 image_url=recipe_data.get('image', ''),
+#                 cooking_time=f"{recipe_data.get('readyInMinutes', 0)} minutes",
+#                 num_steps=len(instructions),
+#                 calories=calories,
+#                 ingredients=ingredients_with_icons,
+#                 instructions=instructions,
+#                 servings=recipe_data.get('servings', 1)
+#             )
+            
+#             recipes.append(recipe)
+#             active_recipes[user_id][recipe_id] = recipe
         
-        # Store recipes in memory
-        for recipe_data in recipes_data.get('recipes', []):
-            recipe = Recipe(**recipe_data)
-            active_recipes[recipe.id] = recipe
+#         return JSONResponse(content={"recipes": [recipe.model_dump() for recipe in recipes]})
         
-        return JSONResponse(content=recipes_data)
+#     except Exception as e:
+#         print(f"Error in generate_recipes: {e}")
+#         raise HTTPException(status_code=500, detail=f"Error generating recipes: {str(e)}")
+
+@app.post("/api/generate-recipes")
+async def generate_recipes(
+    request: RecipeRequest, 
+    user_id: str = Query(..., description="User ID")
+):
+    """Generate recipe suggestions based on ingredients using Spoonacular API's findByIngredients endpoint"""
+    try:
+        if user_id not in active_recipes:
+            active_recipes[user_id] = {}
+
+        # Use findByIngredients endpoint
+        base_url = "https://api.spoonacular.com/recipes/findByIngredients"
+        
+        params = {
+            "apiKey": spoonacular_api_key,
+            "ingredients": ",".join(request.ingredients),  # Comma-separated list
+            "number": 100,  # Get more recipes initially to filter later
+            "ranking": 2,  # Maximize used ingredients
+            "ignorePantry": True,  # Exclude pantry staples
+        }
+
+        # Make initial API request
+        response = requests.get(base_url, params=params)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Failed to fetch recipes from Spoonacular")
+        
+        recipe_list = response.json()
+        
+        # If no recipes found, return empty list
+        if not recipe_list:
+            return JSONResponse(content={"recipes": []})
+        
+        # Extract recipe IDs for detailed information
+        recipe_ids = [str(recipe['id']) for recipe in recipe_list]
+        
+        # Get detailed recipe information using bulk endpoint
+        detailed_url = "https://api.spoonacular.com/recipes/informationBulk"
+        detailed_params = {
+            "apiKey": spoonacular_api_key,
+            "ids": ",".join(recipe_ids),
+            "includeNutrition": True
+        }
+        
+        detailed_response = requests.get(detailed_url, params=detailed_params)
+        if detailed_response.status_code != 200:
+            raise HTTPException(status_code=detailed_response.status_code, detail="Failed to fetch recipe details")
+        
+        detailed_recipes = detailed_response.json()
+        
+        # Apply filters
+        filtered_recipes = []
+        for recipe_data in detailed_recipes:
+            # Filter by cuisine
+            if request.cuisine_type:
+                cuisines = recipe_data.get('cuisines', [])
+                if not any(request.cuisine_type.lower() in cuisine.lower() for cuisine in cuisines):
+                    continue
+            
+            # Filter by dietary preferences
+            if request.dietary_preferences and request.dietary_preferences.lower() != "no preference":
+                diet_key = request.dietary_preferences.lower()
+                
+                if diet_key == "vegetarian" and not recipe_data.get('vegetarian', False):
+                    continue
+                if diet_key == "vegan" and not recipe_data.get('vegan', False):
+                    continue
+                if diet_key == "low carb":
+                    if 'nutrition' in recipe_data:
+                        carbs = next((n for n in recipe_data['nutrition']['nutrients'] if n['name'] == 'Carbohydrates'), None)
+                        if carbs and carbs['amount'] > 100:  # More generous threshold
+                            continue
+
+                if diet_key == "high protein":
+                    if 'nutrition' in recipe_data:
+                        protein = next((n for n in recipe_data['nutrition']['nutrients'] if n['name'] == 'Protein'), None)
+                        if protein and protein['amount'] < 15:  # Lower threshold
+                            continue
+            
+            # Filter by max ready time
+            if request.max_ready_time and recipe_data.get('readyInMinutes', 0) > request.max_ready_time:
+                continue
+            
+            filtered_recipes.append(recipe_data)
+        
+        # Limit to 3 recipes
+        filtered_recipes = filtered_recipes[:3]
+        
+        # Format response
+        recipes = []
+        for i, recipe_data in enumerate(filtered_recipes):
+            # Extract calories
+            calories = "N/A"
+            if 'nutrition' in recipe_data:
+                for nutrient in recipe_data['nutrition']['nutrients']:
+                    if nutrient['name'] == 'Calories':
+                        calories = f"{nutrient['amount']} {nutrient['unit']}"
+                        break
+            
+            # Extract ingredients
+            ingredient_names = [ing.get('name', '') for ing in recipe_data.get('extendedIngredients', [])]
+            ingredients_with_icons = await generate_ingredient_icons(ingredient_names)
+            
+            # Extract instructions
+            instructions = []
+            if recipe_data.get('analyzedInstructions') and len(recipe_data['analyzedInstructions']) > 0:
+                for step in recipe_data['analyzedInstructions'][0].get('steps', []):
+                    instructions.append(f"Step {step.get('number', '')}: {step.get('step', '')}")
+            
+            # Create recipe object
+            recipe_id = f"recipe_{user_id}_{i+1}"
+            recipe = Recipe(
+                id=recipe_id,
+                title=recipe_data.get('title', 'Unknown Recipe'),
+                image_url=recipe_data.get('image', ''),
+                cooking_time=f"{recipe_data.get('readyInMinutes', 0)} minutes",
+                num_steps=len(instructions),
+                calories=calories,
+                ingredients=ingredients_with_icons,
+                instructions=instructions,
+                servings=recipe_data.get('servings', 1)
+            )
+            
+            recipes.append(recipe)
+            active_recipes[user_id][recipe_id] = recipe
+        
+        return JSONResponse(content={"recipes": [recipe.model_dump() for recipe in recipes]})
         
     except Exception as e:
         print(f"Error in generate_recipes: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating recipes: {str(e)}")
 
+
 @app.post("/api/start-cooking/{recipe_id}")
-async def start_cooking(recipe_id: str):
+async def start_cooking(
+    recipe_id: str, 
+    user_id: str = Query(..., description="User ID")
+):
     """Start a cooking session for a specific recipe"""
-    if recipe_id not in active_recipes:
+    # Initialize user-specific storage if needed
+    if user_id not in active_recipes:
+        active_recipes[user_id] = {}
+    
+    if recipe_id not in active_recipes[user_id]:
         raise HTTPException(status_code=404, detail="Recipe not found")
     
-    recipe = active_recipes[recipe_id]
+    recipe = active_recipes[user_id][recipe_id]
     session_id = f"session_{datetime.now().timestamp()}"
     
+    # Initialize user-specific cooking sessions if needed
+    if user_id not in cooking_sessions:
+        cooking_sessions[user_id] = {}
+    
     # Store session without pre-generated TTS to improve response time
-    cooking_sessions[session_id] = {
+    cooking_sessions[user_id][session_id] = {
         "recipe_id": recipe_id,
         "current_step": 0,
         "timers": [],
         "started_at": datetime.now().isoformat()
     }
     
+    # Initialize user-specific WebSocket connections if needed
+    if user_id not in websocket_connections:
+        websocket_connections[user_id] = {}
+    
     return {
         "session_id": session_id,
-        "recipe": recipe.model_dump(),  
+        "recipe": recipe.model_dump(),
         "current_step": 0,
-        "total_steps": len(recipe.steps)
+        "total_steps": len(recipe.instructions)
     }
 
 @app.get("/api/tts/{audio_key}")
@@ -384,20 +624,30 @@ async def generate_tts(request: TTSRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
+@app.websocket("/ws/{user_id}/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str, session_id: str):
     """WebSocket for real-time cooking guidance with continuous voice detection"""
     await websocket.accept()
-    websocket_connections[session_id] = websocket
+    
+    # Initialize user-specific WebSocket connections if needed
+    if user_id not in websocket_connections:
+        websocket_connections[user_id] = {}
+    
+    websocket_connections[user_id][session_id] = websocket
     
     try:
         # Get session and recipe
-        if session_id not in cooking_sessions:
+        if user_id not in cooking_sessions or session_id not in cooking_sessions[user_id]:
             await websocket.send_json({"error": "Session not found"})
             return
             
-        session = cooking_sessions[session_id]
-        recipe = active_recipes[session["recipe_id"]]
+        session = cooking_sessions[user_id][session_id]
+        
+        if user_id not in active_recipes or session["recipe_id"] not in active_recipes[user_id]:
+            await websocket.send_json({"error": "Recipe not found"})
+            return
+            
+        recipe = active_recipes[user_id][session["recipe_id"]]
         current_step = session["current_step"]
         
         while True:
@@ -473,7 +723,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             command = data.get("command", "").lower()
             
             # Validate command sequence
-            if command == "next" and current_step >= len(recipe.steps) - 1:
+            if command == "next" and current_step >= len(recipe.instructions) - 1:
                 await websocket.send_json({
                     "action": "recipe_completed",
                     "message": "Congratulations! You've completed the recipe!"
@@ -494,8 +744,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 await websocket.send_json({
                     "action": "step_updated",
                     "current_step": current_step,
-                    "step_text": recipe.steps[current_step],
-                    "is_last_step": current_step == len(recipe.steps) - 1
+                    "step_text": recipe.instructions[current_step],
+                    "is_last_step": current_step == len(recipe.instructions) - 1
                 })
                 
             elif command == "previous" or command == "back":
@@ -505,7 +755,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 await websocket.send_json({
                     "action": "step_updated",
                     "current_step": current_step,
-                    "step_text": recipe.steps[current_step],
+                    "step_text": recipe.instructions[current_step],
                     "is_last_step": False
                 })
                 
@@ -513,7 +763,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 await websocket.send_json({
                     "action": "step_repeated",
                     "current_step": current_step,
-                    "step_text": recipe.steps[current_step]
+                    "step_text": recipe.instructions[current_step]
                 })
                 
             elif command.startswith("timer"):
@@ -549,16 +799,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 await websocket.send_json({
                     "action": "status",
                     "current_step": current_step,
-                    "total_steps": len(recipe.steps),
-                    "step_text": recipe.steps[current_step],
+                    "total_steps": len(recipe.instructions),
+                    "step_text": recipe.instructions[current_step],
                     "timers": session["timers"]
                 })
     
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
-        if session_id in websocket_connections:
-            del websocket_connections[session_id]
+        if user_id in websocket_connections and session_id in websocket_connections[user_id]:
+            del websocket_connections[user_id][session_id]
 
 async def handle_timer(websocket: WebSocket, timer_id: str, duration: int):
     """Handle timer countdown"""
@@ -573,7 +823,11 @@ async def handle_timer(websocket: WebSocket, timer_id: str, duration: int):
         pass
 
 @app.post("/api/voice-command/{session_id}")
-async def process_voice_command(session_id: str, voice_data: VoiceCommand):
+async def process_voice_command(
+    session_id: str, 
+    voice_data: VoiceCommand,
+    user_id: str = Query(..., description="User ID")
+):
     """Process voice commands using Whisper API"""
     try:
         client = AsyncOpenAI(api_key=openai_api_key)
@@ -606,12 +860,15 @@ async def process_voice_command(session_id: str, voice_data: VoiceCommand):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/recipe/{recipe_id}")
-async def get_recipe(recipe_id: str):
+async def get_recipe(
+    recipe_id: str, 
+    user_id: str = Query(..., description="User ID")
+):
     """Get a specific recipe by ID"""
-    if recipe_id not in active_recipes:
+    if user_id not in active_recipes or recipe_id not in active_recipes[user_id]:
         raise HTTPException(status_code=404, detail="Recipe not found")
     
-    return active_recipes[recipe_id].model_dump()  
+    return active_recipes[user_id][recipe_id].model_dump()
 
 # Serve static files
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
